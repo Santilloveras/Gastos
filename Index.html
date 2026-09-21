@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>Gastos</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { fondo: '#070B1A', superficie: '#111830', acento: '#D4AF37', apagado: '#8B8778' },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    html, body { background: #070B1A; color: #F7F3E8; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 16px;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: none;
+    }
+    body.bloqueado { overflow: hidden; }
+    button { touch-action: manipulation; }
+
+    /* Tipografía */
+    .etiqueta {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #8B8778;
+    }
+    .monto-xl {
+      font-size: 48px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 56px;
+    }
+
+    /* Inputs */
+    .zona-monto { cursor: text; min-height: 56px; }
+    .input-monto {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: 0;
+      outline: none;
+      padding: 0;
+      color: #F7F3E8;
+      caret-color: #F7F3E8;
+    }
+    .input-monto::placeholder { color: #2E3350; }
+    .input-detalle {
+      width: 100%;
+      min-height: 48px;
+      padding: 14px 24px;
+      border-radius: 9999px;
+      background: #111830;
+      border: 0;
+      outline: none;
+      color: #F7F3E8;
+      font-size: 16px;
+    }
+    .input-detalle::placeholder { color: #8B8778; }
+    .input-detalle:focus { box-shadow: inset 0 0 0 1px #4A4E63; }
+
+    /* Geometría */
+    .pill { border-radius: 9999px; padding: 14px 32px; min-height: 48px; font-size: 16px; }
+    .card { background: #111830; border-radius: 32px; }
+
+    /* Selector de categoría */
+    .selector {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 48px;
+      padding: 14px 24px;
+      border-radius: 9999px;
+      background: #111830;
+      color: #F7F3E8;
+      font-size: 16px;
+      text-align: left;
+    }
+    .selector svg { width: 20px; height: 20px; flex-shrink: 0; color: #8B8778; }
+    .selector.vacio span { color: #8B8778; }
+
+    .btn-primario {
+      width: 100%;
+      background: linear-gradient(135deg, #F3D98B 0%, #D4AF37 45%, #A8801F 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      color: #070B1A;
+      font-weight: 600;
+      transition: opacity 0.15s, background 0.15s, transform 0.1s;
+    }
+    .btn-primario:active { transform: scale(0.98); }
+    .btn-primario.ocupado { opacity: 0.6; }
+    .btn-primario.ok { background: #F7F3E8; }
+    .btn-primario.error { background: #111830; color: #E8836B; }
+
+    button:focus-visible { outline: 2px solid #F7F3E8; outline-offset: 2px; }
+
+    /* Estructura fija */
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #070B1A;
+      padding-top: env(safe-area-inset-top);
+    }
+    .btn-sync {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      color: #8B8778;
+    }
+    .btn-sync svg { width: 20px; height: 20px; }
+    .girando { animation: girar 0.8s linear infinite; }
+    @keyframes girar { to { transform: rotate(360deg); } }
+
+    .contenido { padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
+
+    .zona-guardar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(64px + env(safe-area-inset-bottom));
+      padding-top: 16px;
+      background: linear-gradient(to bottom, rgba(7, 11, 26, 0), #070B1A 40%);
+      z-index: 20;
+    }
+    .tabbar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #111830;
+      padding-bottom: env(safe-area-inset-bottom);
+      z-index: 30;
+    }
+    .tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 48px;
+      color: #8B8778;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+    .tab svg { width: 20px; height: 20px; }
+    .tab.activo { color: #F7F3E8; }
+
+    /* Hoja inferior de categorías */
+    .hoja-fondo {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: flex-end;
+      background: rgba(0, 0, 0, 0);
+      transition: background 0.2s;
+    }
+    .hoja-fondo.abierta { background: rgba(0, 0, 0, 0.6); }
+    .hoja-panel {
+      width: 100%;
+      max-width: 448px;
+      margin: 0 auto;
+      max-height: 72vh;
+      display: flex;
+      flex-direction: column;
+      background: #111830;
+      border-radius: 32px 32px 0 0;
+      padding: 8px 16px calc(24px + env(safe-area-inset-bottom));
+      transform: translateY(100%);
+      transition: transform 0.22s ease-out;
+    }
+    .hoja-fondo.abierta .hoja-panel { transform: translateY(0); }
+    .hoja-asa { width: 40px; height: 4px; border-radius: 9999px; background: #4A4E63; margin: 8px auto 16px; }
+    .hoja-lista { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .opcion {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 56px;
+      padding: 14px 24px;
+      border-radius: 9999px;
+      color: #D9D2BE;
+      font-size: 16px;
+      text-align: left;
+    }
+    .opcion:active { background: #070B1A; }
+    .opcion.sel { background: #070B1A; color: #F7F3E8; font-weight: 500; }
+    .opcion svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+    /* Resumen */
+    .pista { height: 8px; border-radius: 9999px; background: #070B1A; overflow: hidden; }
+    .relleno { height: 100%; border-radius: 9999px; background: #4A4E63; transition: width 0.4s; }
+    .relleno.principal { background: linear-gradient(90deg, #A8801F, #D4AF37 60%, #F3D98B); }
+    .fila-mov {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      min-height: 56px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(139, 135, 120, 0.15);
+    }
+    .fila-mov:last-child { border-bottom: 0; }
+
+    /* Pantalla de clave */
+    .pantalla-clave {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: #070B1A;
+      padding: calc(32px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .girando { animation: none; }
+      .relleno, .btn-primario, .hoja-panel, .hoja-fondo { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="max-w-md mx-auto px-4 flex items-center justify-between" style="height:64px">
+      <span id="tituloPantalla" class="etiqueta">Cargar gasto</span>
+      <button id="btnSync" type="button" class="btn-sync" aria-label="Sincronizar categorías y datos">
+        <svg id="icoSync" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+          <polyline points="21 3 21 9 15 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="contenido max-w-md mx-auto px-4">
+
+    <!-- CARGAR -->
+    <section id="vistaCargar">
+      <div class="pt-6">
+        <span class="etiqueta">Monto</span>
+        <label for="monto" class="zona-monto flex items-baseline gap-2 mt-2">
+          <span class="monto-xl text-apagado">$</span>
+          <input id="monto" type="text" inputmode="decimal" autocomplete="off" placeholder="0" class="monto-xl input-monto" enterkeyhint="done">
+        </label>
+      </div>
+
+      <div class="pt-8">
+        <label for="detalle" class="etiqueta">Detalle</label>
+        <input id="detalle" type="text" maxlength="120" autocomplete="off" placeholder="Opcional" class="input-detalle mt-2" enterkeyhint="done">
+      </div>
+
+      <div class="pt-8">
+        <span class="etiqueta">Categoría</span>
+        <button id="btnCategoria" type="button" class="selector vacio mt-2" aria-haspopup="listbox">
+          <span id="catActual" class="truncate">Elegí una categoría</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- RESUMEN -->
+    <section id="vistaResumen" class="hidden">
+      <div class="pt-6">
+        <span id="mesLabel" class="etiqueta">Gastado este mes</span>
+        <div id="total" class="monto-xl mt-2">$ 0</div>
+      </div>
+
+      <div class="card p-6 mt-6">
+        <span class="etiqueta">Top categorías</span>
+        <div id="top" class="mt-2"></div>
+      </div>
+
+      <div class="card p-6 mt-4">
+        <span class="etiqueta">Evolución del mes</span>
+        <div class="mt-4" style="height:160px"><canvas id="chLinea"></canvas></div>
+      </div>
+
+      <div class="card p-6 mt-4">
+        <span class="etiqueta">Por categoría</span>
+        <div id="donaWrap" class="mt-4" style="height:256px"><canvas id="chDona"></canvas></div>
+        <p id="donaVacia" class="hidden text-apagado mt-4">Sin gastos este mes.</p>
+      </div>
+
+      <div class="card p-6 mt-4">
+        <span class="etiqueta">Últimos movimientos</span>
+        <div id="ultimos" class="mt-2"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="zonaGuardar" class="zona-guardar">
+    <div class="max-w-md mx-auto px-4 pb-2">
+      <button id="btnGuardar" type="button" class="pill btn-primario">Guardar</button>
+    </div>
+  </div>
+
+  <nav class="tabbar">
+    <div class="max-w-md mx-auto grid grid-cols-2" style="height:64px">
+      <button type="button" class="tab activo" data-tab="cargar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+        <span>Cargar</span>
+      </button>
+      <button type="button" class="tab" data-tab="resumen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>
+        <span>Resumen</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hoja inferior: lista de categorías -->
+  <div id="hojaCategorias" class="hoja-fondo hidden" aria-hidden="true">
+    <div class="hoja-panel" role="dialog" aria-modal="true" aria-label="Elegir categoría">
+      <div class="hoja-asa"></div>
+      <span class="etiqueta" style="padding:0 24px">Categoría</span>
+      <div id="listaCategorias" class="hoja-lista mt-2" role="listbox"></div>
+    </div>
+  </div>
+
+  <!-- Pantalla de clave (solo la primera vez en cada dispositivo) -->
+  <div id="pantallaClave" class="pantalla-clave hidden">
+    <div class="max-w-md w-full mx-auto">
+      <img src="icon-180.png" alt="" width="64" height="64" style="border-radius:16px">
+      <h1 class="mt-6" style="font-size:24px;font-weight:500;letter-spacing:-0.02em">Tus gastos</h1>
+      <p class="mt-2" style="color:#8B8778">Ingresá la clave de tu planilla. Se pide una sola vez en este dispositivo.</p>
+      <label for="inputClave" class="etiqueta mt-8">Clave</label>
+      <input id="inputClave" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" class="input-detalle mt-2" enterkeyhint="go">
+      <p id="errorClave" class="hidden mt-4" style="color:#E8836B"></p>
+      <button id="btnEntrar" type="button" class="pill btn-primario mt-6">Entrar</button>
+    </div>
+  </div>
+
+  <script>
+    /* ===== CONFIGURACIÓN: pegá acá la URL de tu Web App (termina en /exec) ===== */
+    var API_URL = 'https://script.google.com/macros/s/AKfycbyqRwPU0R1ZI0NEZqAAH_PWRuisC9tObiC3X_JmBHuOtHFQxvAgFKyyp1SAQVOCoIjONg/exec';
+
+    var CLAVE_STORAGE = 'gastos_clave';
+    var clave = leerClave();
+
+    var estado = { categorias: [], catSel: null, resumen: null, tab: 'cargar', guardando: false };
+    var graficos = { linea: null, dona: null };
+    var timerBtn = null;
+    var montoTeniaFoco = false;
+    var GRISES = ['#D9D2BE', '#B3AC98', '#8B8778', '#4A4E63', '#2E3350'];
+    var ICONO_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+    /* ---------- Utilidades ---------- */
+    function el(id) { return document.getElementById(id); }
+
+    function fmt(n) {
+      return '$ ' + Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function compacto(v) {
+      if (v >= 1000000) return '$ ' + (v / 1000000).toFixed(1).replace('.', ',') + 'M';
+      if (v >= 1000) return '$ ' + Math.round(v / 1000) + 'k';
+      return '$ ' + v;
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    /* El input siempre queda en formato argentino: punto de miles, coma decimal */
+    function parsearMonto(txt) {
+      var s = String(txt || '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+      var n = parseFloat(s);
+      return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+    }
+
+    /* Formatea mientras escribís y conserva la posición del cursor */
+    function formatearMonto(input, ev) {
+      var v = input.value;
+      var pos = input.selectionStart == null ? v.length : input.selectionStart;
+
+      // Si el teclado solo muestra punto, el punto tipeado se toma como coma decimal
+      if (ev && ev.data === '.') {
+        v = v.slice(0, pos - 1) + ',' + v.slice(pos);
+      }
+
+      var significativosAntes = v.slice(0, pos).replace(/[^0-9,]/g, '').length;
+      var limpio = v.replace(/[^0-9,]/g, '');
+      var partes = limpio.split(',');
+      var entero = partes[0].replace(/^0+(?=\d)/, '');
+      var dec = partes.length > 1 ? partes.slice(1).join('').slice(0, 2) : null;
+
+      if (entero === '' && dec !== null) {
+        entero = '0';
+        significativosAntes++;
+      }
+
+      var resultado = entero.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (dec !== null ? ',' + dec : '');
+
+      var cursor = 0;
+      var contados = 0;
+      while (cursor < resultado.length && contados < significativosAntes) {
+        if (/[0-9,]/.test(resultado.charAt(cursor))) contados++;
+        cursor++;
+      }
+
+      input.value = resultado;
+      try { input.setSelectionRange(cursor, cursor); } catch (e) {}
+    }
+
+    /* ---------- Clave y API ---------- */
+    function leerClave() {
+      try { return localStorage.getItem(CLAVE_STORAGE) || ''; } catch (e) { return ''; }
+    }
+
+    function guardarClave(valor) {
+      clave = valor;
+      try {
+        if (valor) localStorage.setItem(CLAVE_STORAGE, valor);
+        else localStorage.removeItem(CLAVE_STORAGE);
+      } catch (e) {}
+    }
+
+    function api(accion, payload) {
+      return fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ clave: clave, accion: accion, payload: payload || null })
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error('Error de conexión (' + r.status + ')');
+          return r.json();
+        })
+        .then(function (j) {
+          if (!j.ok) {
+            var err = new Error(j.error || 'Error inesperado');
+            err.codigo = j.codigo;
+            throw err;
+          }
+          return j.data;
+        });
+    }
+
+    function mensajeError(e, porDefecto) {
+      if (e && e.message === 'Failed to fetch') return 'Sin conexión';
+      return e && e.message ? e.message : porDefecto;
+    }
+
+    function pedirClave(mensaje) {
+      guardarClave('');
+      el('pantallaClave').classList.remove('hidden');
+      var err = el('errorClave');
+      err.textContent = mensaje || '';
+      err.classList.toggle('hidden', !mensaje);
+    }
+
+    function entrar() {
+      var valor = el('inputClave').value.trim();
+      if (!valor) return;
+      var btn = el('btnEntrar');
+      btn.textContent = 'Verificando...';
+      btn.className = 'pill btn-primario ocupado mt-6';
+      guardarClave(valor);
+      api('datos')
+        .then(function (d) {
+          el('inputClave').value = '';
+          el('inputClave').blur();
+          el('pantallaClave').classList.add('hidden');
+          aplicarDatos(d);
+        })
+        .catch(function (e) {
+          pedirClave(e.codigo === 'NO_AUTORIZADO' ? 'Clave incorrecta' : mensajeError(e, 'No se pudo conectar'));
+        })
+        .then(function () {
+          btn.textContent = 'Entrar';
+          btn.className = 'pill btn-primario mt-6';
+        });
+    }
+
+    /* ---------- Botón Guardar: estados ---------- */
+    function mostrarBoton(texto, clase, ms) {
+      var b = el('btnGuardar');
+      clearTimeout(timerBtn);
+      b.textContent = texto;
+      b.className = 'pill btn-primario' + (clase ? ' ' + clase : '');
+      if (ms) {
+        timerBtn = setTimeout(function () {
+          b.textContent = 'Guardar';
+          b.className = 'pill btn-primario';
+        }, ms);
+      }
+    }
+
+    /* ---------- Datos ---------- */
+    function aplicarDatos(d) {
+      estado.categorias = d.categorias || [];
+      if (estado.categorias.indexOf(estado.catSel) === -1) {
+        estado.catSel = estado.categorias[0] || null;
+      }
+      renderCategorias();
+      aplicarResumen(d.resumen);
+    }
+
+    function sincronizar() {
+      if (!clave) { pedirClave(''); return; }
+      el('icoSync').classList.add('girando');
+      api('datos')
+        .then(function (d) {
+          el('icoSync').classList.remove('girando');
+          aplicarDatos(d);
+        })
+        .catch(function (e) {
+          el('icoSync').classList.remove('girando');
+          if (e.codigo === 'NO_AUTORIZADO') { pedirClave('La clave cambió, ingresala de nuevo'); return; }
+          mostrarBoton(mensajeError(e, 'No se pudo sincronizar'), 'error', 2400);
+        });
+    }
+
+    function guardar() {
+      if (estado.guardando) return;
+      var input = el('monto');
+      var inputDetalle = el('detalle');
+      var monto = parsearMonto(input.value);
+      var mantenerTeclado = montoTeniaFoco || document.activeElement === input;
+      montoTeniaFoco = false;
+
+      if (!(monto > 0)) { mostrarBoton('Ingresá un monto', 'error', 1600); return; }
+      if (!estado.catSel) { mostrarBoton('Elegí una categoría', 'error', 1600); return; }
+
+      var payload = { monto: monto, detalle: inputDetalle.value, categoria: estado.catSel };
+      var respaldoMonto = input.value;
+      var respaldoDetalle = inputDetalle.value;
+
+      estado.guardando = true;
+      mostrarBoton('Guardando...', 'ocupado', 0);
+      input.value = '';
+      inputDetalle.value = '';
+      if (mantenerTeclado) input.focus();
+
+      api('guardar', payload)
+        .then(function (r) {
+          estado.guardando = false;
+          aplicarResumen(r.resumen);
+          mostrarBoton('Guardado ' + fmt(monto), 'ok', 1400);
+        })
+        .catch(function (e) {
+          estado.guardando = false;
+          if (!input.value) {
+            input.value = respaldoMonto;
+            inputDetalle.value = respaldoDetalle;
+          }
+          if (e.codigo === 'NO_AUTORIZADO') { pedirClave('La clave cambió, ingresala de nuevo'); return; }
+          mostrarBoton(mensajeError(e, 'No se pudo guardar'), 'error', 2400);
+        });
+    }
+
+    /* ---------- Categorías: botón + hoja inferior ---------- */
+    function renderCategorias() {
+      var btn = el('btnCategoria');
+      if (estado.catSel) {
+        el('catActual').textContent = estado.catSel;
+        btn.classList.remove('vacio');
+      } else {
+        el('catActual').textContent = estado.categorias.length ? 'Elegí una categoría' : 'Sin categorías';
+        btn.classList.add('vacio');
+      }
+
+      var lista = el('listaCategorias');
+      if (!estado.categorias.length) {
+        lista.innerHTML = '<p class="text-apagado" style="padding:14px 24px">Agregá categorías en la hoja Config, columna A, y tocá sincronizar.</p>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < estado.categorias.length; i++) {
+        var cat = estado.categorias[i];
+        var sel = cat === estado.catSel;
+        html += '<button type="button" role="option" aria-selected="' + sel + '" class="opcion' + (sel ? ' sel' : '') + '" data-i="' + i + '">' +
+          '<span class="truncate">' + esc(cat) + '</span>' + (sel ? ICONO_CHECK : '') +
+        '</button>';
+      }
+      lista.innerHTML = html;
+    }
+
+    function abrirHoja() {
+      el('monto').blur();
+      el('detalle').blur();
+      var hoja = el('hojaCategorias');
+      hoja.classList.remove('hidden');
+      hoja.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('bloqueado');
+      void hoja.offsetWidth;
+      hoja.classList.add('abierta');
+      var sel = el('listaCategorias').querySelector('.sel');
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    }
+
+    function cerrarHoja() {
+      var hoja = el('hojaCategorias');
+      hoja.classList.remove('abierta');
+      hoja.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('bloqueado');
+      setTimeout(function () { hoja.classList.add('hidden'); }, 220);
+    }
+
+    /* ---------- Render: Resumen ---------- */
+    function aplicarResumen(r) {
+      if (!r) return;
+      estado.resumen = r;
+      el('mesLabel').textContent = 'Gastado en ' + r.mes;
+      el('total').textContent = fmt(r.total);
+      renderTop(r);
+      renderUltimos(r);
+      if (estado.tab === 'resumen') renderGraficos();
+    }
+
+    function renderTop(r) {
+      var c = el('top');
+      if (!r.top.length) {
+        c.innerHTML = '<p class="text-apagado py-2">Todavía no hay gastos este mes.</p>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < r.top.length; i++) {
+        var t = r.top[i];
+        html += '<div class="py-2">' +
+          '<div class="flex justify-between items-baseline gap-4">' +
+            '<span class="truncate">' + esc(t.nombre) + '</span>' +
+            '<span class="font-medium whitespace-nowrap">' + fmt(t.monto) + '</span>' +
+          '</div>' +
+          '<div class="pista mt-2"><div class="relleno' + (i === 0 ? ' principal' : '') + '" style="width:' + t.pct + '%"></div></div>' +
+          '<span class="etiqueta mt-2">' + String(t.pct).replace('.', ',') + '% del total</span>' +
+        '</div>';
+      }
+      c.innerHTML = html;
+    }
+
+    function renderUltimos(r) {
+      var c = el('ultimos');
+      if (!r.ultimos.length) {
+        c.innerHTML = '<p class="text-apagado py-2">Sin movimientos todavía.</p>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < r.ultimos.length; i++) {
+        var m = r.ultimos[i];
+        html += '<div class="fila-mov">' +
+          '<div class="min-w-0">' +
+            '<div class="truncate">' + esc(m.detalle || m.categoria) + '</div>' +
+            '<span class="etiqueta mt-2">' + esc(m.fecha) + '&nbsp;&nbsp;' + esc(m.categoria) + '</span>' +
+          '</div>' +
+          '<span class="font-medium whitespace-nowrap">' + fmt(m.monto) + '</span>' +
+        '</div>';
+      }
+      c.innerHTML = html;
+    }
+
+    function tooltipBase(callbacks) {
+      return {
+        backgroundColor: '#070B1A',
+        titleColor: '#F7F3E8',
+        bodyColor: '#F7F3E8',
+        padding: 8,
+        cornerRadius: 8,
+        displayColors: false,
+        callbacks: callbacks
+      };
+    }
+
+    function renderGraficos() {
+      var r = estado.resumen;
+      if (!r || typeof Chart === 'undefined') return;
+      Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+      Chart.defaults.color = '#8B8778';
+
+      /* Línea: gasto acumulado del mes */
+      var labels = r.evolucion.labels;
+      var valores = r.evolucion.valores;
+      if (graficos.linea) {
+        graficos.linea.data.labels = labels;
+        graficos.linea.data.datasets[0].data = valores;
+        graficos.linea.update();
+      } else {
+        graficos.linea = new Chart(el('chLinea'), {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: valores,
+              borderColor: '#D9D2BE',
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              pointHoverBackgroundColor: '#F7F3E8',
+              tension: 0.3,
+              fill: true,
+              backgroundColor: 'rgba(217, 210, 190, 0.08)'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: tooltipBase({
+                title: function (items) { return 'Día ' + items[0].label; },
+                label: function (ctx) { return 'Acumulado ' + fmt(ctx.parsed.y); }
+              })
+            },
+            scales: {
+              x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 6, font: { size: 11 } } },
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(139, 135, 120, 0.15)' },
+                border: { display: false },
+                ticks: { maxTicksLimit: 4, font: { size: 11 }, callback: function (v) { return compacto(v); } }
+              }
+            }
+          }
+        });
+      }
+
+      /* Dona: gasto por categoría (la principal en acento) */
+      var cats = r.categorias;
+      var hay = cats.length > 0;
+      el('donaWrap').classList.toggle('hidden', !hay);
+      el('donaVacia').classList.toggle('hidden', hay);
+
+      var dl = [], dv = [], colores = [];
+      for (var i = 0; i < cats.length; i++) {
+        dl.push(cats[i].nombre);
+        dv.push(cats[i].monto);
+        colores.push(i === 0 ? '#D4AF37' : GRISES[(i - 1) % GRISES.length]);
+      }
+
+      if (graficos.dona) {
+        graficos.dona.data.labels = dl;
+        graficos.dona.data.datasets[0].data = dv;
+        graficos.dona.data.datasets[0].backgroundColor = colores;
+        graficos.dona.update();
+      } else {
+        graficos.dona = new Chart(el('chDona'), {
+          type: 'doughnut',
+          data: { labels: dl, datasets: [{ data: dv, backgroundColor: colores, borderWidth: 0, hoverOffset: 8 }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '72%',
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { color: '#B3AC98', usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 16, font: { size: 11 } }
+              },
+              tooltip: tooltipBase({
+                label: function (ctx) { return ctx.label + ': ' + fmt(ctx.parsed); }
+              })
+            }
+          }
+        });
+      }
+    }
+
+    /* ---------- Navegación ---------- */
+    function mostrarTab(t) {
+      estado.tab = t;
+      el('vistaCargar').classList.toggle('hidden', t !== 'cargar');
+      el('vistaResumen').classList.toggle('hidden', t !== 'resumen');
+      el('zonaGuardar').classList.toggle('hidden', t !== 'cargar');
+      el('tituloPantalla').textContent = t === 'cargar' ? 'Cargar gasto' : 'Resumen';
+      var tabs = document.querySelectorAll('.tab');
+      for (var i = 0; i < tabs.length; i++) {
+        tabs[i].classList.toggle('activo', tabs[i].getAttribute('data-tab') === t);
+      }
+      el('monto').blur();
+      el('detalle').blur();
+      window.scrollTo(0, 0);
+      if (t === 'resumen') renderGraficos();
+    }
+
+    /* ---------- Init ---------- */
+    function init() {
+      var btn = el('btnGuardar');
+      btn.addEventListener('pointerdown', function () {
+        montoTeniaFoco = document.activeElement === el('monto');
+      });
+      btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      btn.addEventListener('click', guardar);
+      el('btnSync').addEventListener('click', sincronizar);
+
+      el('monto').addEventListener('input', function (ev) { formatearMonto(this, ev); });
+
+      function enterGuarda(e) {
+        if (e.key === 'Enter') { e.preventDefault(); guardar(); }
+      }
+      el('monto').addEventListener('keydown', enterGuarda);
+      el('detalle').addEventListener('keydown', enterGuarda);
+
+      el('btnCategoria').addEventListener('click', abrirHoja);
+      el('hojaCategorias').addEventListener('click', function (ev) {
+        if (ev.target === this) cerrarHoja();
+      });
+      el('listaCategorias').addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-i]');
+        if (!b) return;
+        estado.catSel = estado.categorias[Number(b.getAttribute('data-i'))];
+        renderCategorias();
+        cerrarHoja();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !el('hojaCategorias').classList.contains('hidden')) cerrarHoja();
+      });
+
+      var tabs = document.querySelectorAll('.tab');
+      for (var i = 0; i < tabs.length; i++) {
+        tabs[i].addEventListener('click', function () { mostrarTab(this.getAttribute('data-tab')); });
+      }
+
+      el('btnEntrar').addEventListener('click', entrar);
+      el('inputClave').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); entrar(); }
+      });
+
+      renderCategorias();
+      if (clave) sincronizar();
+      else pedirClave('');
+    }
+
+    init();
+  </script>
+</body>
+</html>
